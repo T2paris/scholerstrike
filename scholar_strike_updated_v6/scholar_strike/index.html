@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scholar Strike</title>
+  <!-- External stylesheet for all UI styles -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Home screen allowing the player to start a new adventure -->
+  <div id="homeScreen" class="screen">
+    <div class="panel home-wrap">
+      <div class="home-art"></div>
+      <div class="title">SCHOLAR<br />STRIKE</div>
+      <div class="subtitle">Escolhe um herói, uma disciplina e entra num mundo dark fantasy com cidades, rotas e NPCs legíveis.</div>
+      <button class="btn" id="startBtn">Começar Aventura</button>
+    </div>
+  </div>
+
+  <!-- Character selection screen -->
+  <div id="characterScreen" class="screen hidden">
+    <div class="panel character-wrap">
+      <div style="padding: 18px">
+        <div class="section-label">Escolhe o teu mago</div>
+        <div class="model-grid" id="modelGrid"><!-- dynamically populated --></div>
+      </div>
+      <div class="panel preview-pane">
+        <div class="section-label">Pré-visualização</div>
+        <div class="preview-stage">
+          <canvas id="previewCanvas" class="preview-canvas" width="220" height="320"></canvas>
+        </div>
+        <div>
+          <div class="section-label">Nome</div>
+          <input id="nameInput" class="input" maxlength="18" value="Aveline" />
+        </div>
+        <div>
+          <div class="section-label">Tipo de magia</div>
+          <!-- Classes (school disciplines) are displayed similarly to hero selections. Each
+               option shows a coloured icon along with the class name and a brief
+               description. -->
+          <div id="classGrid" class="class-grid"><!-- dynamically populated --></div>
+        </div>
+        <!-- File upload for study material -->
+        <div>
+          <div class="section-label">Material de Estudo</div>
+          <input id="fileInput" class="input" type="file" accept=".txt,.pdf" />
+          <div id="fileInfo" style="font-size: 14px; color: var(--muted); margin-top: 6px;"></div>
+        </div>
+        <div style="font-size: 15px; color: var(--muted); line-height: 1.5">
+          Esta é uma versão experimental com foco na estrutura. Mais funcionalidades serão adicionadas à medida que o desenvolvimento progride.
+        </div>
+        <div class="actions">
+          <button class="btn secondary" id="backHomeBtn">Voltar</button>
+          <button class="btn" id="enterWorldBtn">Entrar no mundo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main game screen -->
+  <div id="gameScreen" class="screen hidden">
+    <canvas id="gameCanvas" width="320" height="180"></canvas>
+    <div class="hud">
+      <div class="hud-card">
+        <div class="hud-title">Registro</div>
+        <div id="hudName" style="font-size: 18px; color: #f4d98d">Aveline</div>
+        <div id="hudClass" style="font-size: 14px; color: #bfb6a2">Disciplina</div>
+        <div class="hud-row">
+          <span style="width: 32px">HP</span>
+          <div class="bar">
+            <div id="hpFill" class="fill hp" style="width: 100%"></div>
+          </div>
+          <span id="hpText">32/32</span>
+        </div>
+        <div class="hud-row">
+          <span style="width: 32px">MP</span>
+          <div class="bar">
+            <div id="mpFill" class="fill mp" style="width: 100%"></div>
+          </div>
+          <span id="mpText">12/12</span>
+        </div>
+      </div>
+      <div class="hud-card topright">
+        <div class="hud-title">Controles</div>
+        <div class="controls">WASD / Setas — mover<br />E — interagir<br />Shift — correr<br />Esc — menu</div>
+        <div id="regionText" style="margin-top: 8px; font-size: 15px; color: #d9d1bc">Oakvale Hollow</div>
+      </div>
+    </div>
+    <div id="prompt" class="prompt hidden">Pressione E</div>
+    <div id="dialogue" class="dialogue hidden">
+      <div class="dialogue-portrait"><canvas id="portraitCanvas" width="150" height="170"></canvas></div>
+      <div>
+        <div class="dialogue-name" id="dialogueName"></div>
+        <div class="dialogue-text" id="dialogueText"></div>
+        <div class="dialogue-continue">Pressione E para continuar</div>
+      </div>
+    </div>
+    <div id="location" class="location">Oakvale Hollow</div>
+    <div id="fade" class="fade"></div>
+  </div>
+
+  <!-- Main game logic. Embedding the script inline ensures it executes even
+       when loaded via the file protocol in this restricted environment.
+       In a production build, this can instead reference an external
+       JavaScript file. -->
+  <script>
+    /*
+     * Main entry point for the Scholar Strike prototype.
+     * This code was originally placed in a separate file (game.js), but is
+     * included inline here to avoid file:// restrictions in the testing
+     * environment. In a deployed version, consider loading it as an
+     * external script to keep concerns separate.
+     */
+    const TILE = 32;
+    const VIEW_W = 320;
+    const VIEW_H = 180;
+    const SCALE = 3;
+
+    // Element references
+    const homeScreen = document.getElementById('homeScreen');
+    const characterScreen = document.getElementById('characterScreen');
+    const gameScreen = document.getElementById('gameScreen');
+
+    const startBtn = document.getElementById('startBtn');
+    const backHomeBtn = document.getElementById('backHomeBtn');
+    const enterWorldBtn = document.getElementById('enterWorldBtn');
+
+    const nameInput = document.getElementById('nameInput');
+    const modelGrid = document.getElementById('modelGrid');
+
+    // Preview canvas for showing the selected hero. We draw a simple
+    // colored icon as a placeholder for the hero sprite. In future
+    // iterations this can be replaced with the actual sprite sheet.
+    const previewCanvas = document.getElementById('previewCanvas');
+
+    // The hero colour palette is no longer used now that we display
+    // actual pixel‑art portraits for each hero. This object is kept
+    // empty as a fallback but can be removed entirely.
+    const heroColors = {};
+
+    /**
+     * Draws the hero's portrait onto a canvas. When the image
+     * finishes loading, it is scaled to fit within the canvas while
+     * preserving its aspect ratio. Pixel smoothing is disabled to
+     * retain crisp pixel art. If the hero does not have an image
+     * defined the function falls back to a coloured square with the
+     * hero's initial.
+     */
+    function drawHeroIcon(canvas, hero) {
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      if (hero.image) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.imageSmoothingEnabled = false;
+          // compute scale to fit the canvas
+          const scale = Math.max(img.width / w, img.height / h);
+          const drawWidth = img.width / scale;
+          const drawHeight = img.height / scale;
+          const offsetX = (w - drawWidth) / 2;
+          const offsetY = (h - drawHeight) / 2;
+          ctx.clearRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, img.width, img.height, offsetX, offsetY, drawWidth, drawHeight);
+        };
+        img.src = hero.image;
+      } else {
+        // fallback: draw coloured square with initial
+        ctx.fillStyle = heroColors[hero.id] || '#888';
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#000';
+        ctx.font = 'bold 40px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const initial = hero.name?.charAt(0) || '?';
+        ctx.fillText(initial, w / 2, h / 2);
+      }
+    }
+
+    /**
+     * Draws a larger preview of the selected hero on the preview canvas.
+     * Similar to drawHeroIcon but scaled up for the preview area.
+     */
+    function drawHeroPreview(canvas, hero) {
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      if (hero.image) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.imageSmoothingEnabled = false;
+          const scale = Math.max(img.width / w, img.height / h);
+          const drawWidth = img.width / scale;
+          const drawHeight = img.height / scale;
+          const offsetX = (w - drawWidth) / 2;
+          const offsetY = (h - drawHeight) / 2;
+          ctx.clearRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, img.width, img.height, offsetX, offsetY, drawWidth, drawHeight);
+        };
+        img.src = hero.image;
+      } else {
+        ctx.fillStyle = heroColors[hero.id] || '#aaa';
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#000';
+        ctx.font = 'bold 96px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const initial = hero.name?.charAt(0) || '?';
+        ctx.fillText(initial, w / 2, h / 2);
+      }
+    }
+
+    const fileInput = document.getElementById('fileInput');
+    const fileInfo = document.getElementById('fileInfo');
+
+    // Hero options. In this revised design all heroes are variations of a
+    // scholar/mage archetype. The player isn’t choosing between combat
+    // classes like guerreiro or assassino; instead, they select an
+    // appearance for their mage character. Each option represents a
+    // different look but shares the same underlying abilities. The real
+    // specialization comes from the chosen school discipline (math,
+    // history, science, literature).
+    // Hero options for the character selection. Each entry references
+    // a pixel‑art portrait stored in the assets/heroes folder. The id
+    // field is used internally, name is shown in the UI and
+    // className provides a brief flavour description. If you wish to
+    // change the order or add more heroes, add objects here and place
+    // the corresponding PNG in assets/heroes.
+    const availableHeroes = [
+      { id: 'hero1', name: 'Cavaleira',      className: 'Guerreira de Armadura',     image: 'assets/heroes/1.png' },
+      { id: 'hero2', name: 'Orc',            className: 'Berserker Orc',            image: 'assets/heroes/2.png' },
+      { id: 'hero3', name: 'Necromante',     className: 'Mago Sombrio',             image: 'assets/heroes/3.png' },
+      { id: 'hero4', name: 'Arqueira Élfica', className: 'Ranger Élfica',           image: 'assets/heroes/4.png' },
+      { id: 'hero5', name: 'Bárbaro',        className: 'Guerreiro do Norte',        image: 'assets/heroes/5.png' },
+      { id: 'hero6', name: 'Feiticeira',     className: 'Maga Arcana',              image: 'assets/heroes/6.png' },
+      { id: 'hero7', name: 'Paladina',       className: 'Guardião Luminoso',         image: 'assets/heroes/7.png' },
+      { id: 'hero8', name: 'Cavaleiro Dragão',className:'Guerreiro Dracónico',       image: 'assets/heroes/8.png' },
+      { id: 'hero9', name: 'Paladino Dourado',className:'Campeão Sagrado',           image: 'assets/heroes/9.png' },
+    ];
+
+    // Class options (school disciplines). Each class defines the subject area
+    // used to specialize the hero’s spells. A colour is assigned per class
+    // for the purpose of drawing icons. More classes can be added here
+    // provided their id keys are unique.
+    const availableClasses = [
+      { id: 'arithmancer', name: 'Arithmancer', description: 'Matemática – dano explosivo.' },
+      { id: 'bioshaman',   name: 'Bioshaman',   description: 'Biologia – sustentação e curas.' },
+      { id: 'wordweaver',  name: 'Wordweaver',  description: 'Línguas – controlo e fluxo.' },
+      { id: 'sophist',     name: 'Sophist',     description: 'Filosofia – defesa e pressão.' },
+    ];
+
+    // Colour palette for class icons. Each class id maps to a unique colour.
+    const classColors = {
+      arithmancer: '#f2a65a',
+      bioshaman:   '#7ccf93',
+      wordweaver:  '#86b6f6',
+      sophist:     '#d89dd0',
+    };
+
+    /**
+     * Draws a coloured icon representing the class on a small canvas.
+     * Similar to drawHeroIcon, but uses the class colour palette and
+     * displays the first letter of the class name.
+     */
+    function drawClassIcon(canvas, cls) {
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = classColors[cls.id] || '#888';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 40px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const initial = cls.name.charAt(0) || '?';
+      ctx.fillText(initial, w / 2, h / 2);
+    }
+
+    // Utility to switch screen visibility
+    function showScreen(screen) {
+      homeScreen.classList.add('hidden');
+      characterScreen.classList.add('hidden');
+      gameScreen.classList.add('hidden');
+      screen.classList.remove('hidden');
+    }
+
+    // Initialize UI event handlers
+    function initUI() {
+      // Start button leads to character selection
+      startBtn.addEventListener('click', () => {
+        showScreen(characterScreen);
+        populateHeroes();
+        populateClasses();
+      });
+
+      // Back button returns to home
+      backHomeBtn.addEventListener('click', () => {
+        showScreen(homeScreen);
+      });
+
+      // Enter world begins the game with selected options
+      enterWorldBtn.addEventListener('click', () => {
+        showScreen(gameScreen);
+        const hero = characterScreen.dataset.selectedHero;
+        const chosenClass = characterScreen.dataset.selectedClass;
+        document.getElementById('hudName').textContent = nameInput.value || 'Aventurero';
+        document.getElementById('hudClass').textContent = availableClasses.find(cls => cls.id === chosenClass)?.name || 'Magia';
+
+        // Kick off the game once the UI transitions to the game screen. This
+        // initializes the engine, loads a simple map, creates a player and
+        // starts the update/render loop. If a game is already running,
+        // subsequent calls will reset it.
+        startGame();
+      });
+
+      // Handle file upload
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files?.[0];
+        if (!file) {
+          fileInfo.textContent = '';
+          return;
+        }
+        fileInfo.textContent = `Carregaste: ${file.name}`;
+        readStudyFile(file);
+      });
+    }
+
+    // Populate hero selection grid
+    function populateHeroes() {
+      modelGrid.innerHTML = '';
+      availableHeroes.forEach(hero => {
+        const btn = document.createElement('div');
+        btn.className = 'model-btn';
+        btn.dataset.heroId = hero.id;
+        btn.innerHTML = `\n        <canvas class="model-canvas" width="64" height="64"></canvas>\n        <div class="model-name">${hero.name}</div>\n        <div class="model-sub">${hero.className}</div>\n      `;
+        // Draw the hero icon on its canvas
+        const canvas = btn.querySelector('canvas');
+        drawHeroIcon(canvas, hero);
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          characterScreen.dataset.selectedHero = hero.id;
+          // Update the preview canvas when a hero is selected
+          drawHeroPreview(previewCanvas, hero);
+        });
+        modelGrid.appendChild(btn);
+      });
+    }
+
+    // Populate class selection grid (types of magic). Each entry is rendered
+    // similarly to hero cards: a coloured canvas, a title and a subtitle.
+    function populateClasses() {
+      const classGrid = document.getElementById('classGrid');
+      classGrid.innerHTML = '';
+      availableClasses.forEach(cls => {
+        const card = document.createElement('div');
+        card.className = 'class-btn';
+        card.dataset.classId = cls.id;
+        card.innerHTML = `\n          <canvas class="class-canvas" width="64" height="64"></canvas>\n          <div class="class-name">${cls.name}</div>\n          <div class="class-sub">${cls.description}</div>\n        `;
+        const canvas = card.querySelector('canvas');
+        drawClassIcon(canvas, cls);
+        card.addEventListener('click', () => {
+          document.querySelectorAll('.class-btn').forEach(el => el.classList.remove('selected'));
+          card.classList.add('selected');
+          characterScreen.dataset.selectedClass = cls.id;
+        });
+        classGrid.appendChild(card);
+      });
+    }
+
+    // Read the uploaded study material. Currently handles plain text files; PDFs require pdf.js
+    function readStudyFile(file) {
+      if (file.type === 'application/pdf') {
+        const reader = new FileReader();
+        reader.onload = () => {
+          console.warn('PDF parsing not yet implemented.');
+        };
+        reader.readAsArrayBuffer(file);
+      } else {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = reader.result;
+          console.log('Conteúdo do material de estudo:', text);
+        };
+        reader.readAsText(file, 'utf-8');
+      }
+    }
+
+    /* --------------------------------------------------------------------
+     * Game engine and entity classes
+     *
+     * The following classes implement a minimal real‑time loop, map
+     * representation and player movement. They serve as a foundation for
+     * building the JRPG mechanics (exploration, dialogues and battles). In
+     * subsequent iterations these classes can be extended or split into
+     * modules.
+     */
+
+    /**
+     * Represents a tile‑based map. Tiles are stored as a one‑dimensional
+     * array of integers. For now, tile values of 0 are passable ground
+     * and 1 represent walls. In a full implementation these values would
+     * index into a tileset image.
+     */
+    class GameMap {
+      constructor(width, height, tiles) {
+        this.width = width;
+        this.height = height;
+        this.tiles = tiles;
+      }
+
+      /**
+       * Draws the map onto the provided 2D rendering context. The engine
+       * will scale the context appropriately before calling this.
+       */
+      draw(ctx) {
+        const tileSize = TILE;
+        for (let y = 0; y < this.height; y++) {
+          for (let x = 0; x < this.width; x++) {
+            const tile = this.tiles[y * this.width + x];
+            if (tile === 1) {
+              ctx.fillStyle = '#3a2e4a'; // wall color
+            } else {
+              ctx.fillStyle = '#252134'; // ground color
+            }
+            ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+          }
+        }
+      }
+
+      /**
+       * Returns true if the specified tile coordinates are walkable.
+       */
+      isWalkable(tx, ty) {
+        if (tx < 0 || ty < 0 || tx >= this.width || ty >= this.height) return false;
+        const tile = this.tiles[ty * this.width + tx];
+        return tile === 0;
+      }
+    }
+
+    /**
+     * Base class for entities that live in the game world. Each entity
+     * implements update() and draw() and may handle its own input.
+     */
+    class Entity {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+      }
+      update(dt, engine) {}
+      draw(ctx) {}
+    }
+
+    /**
+     * Player controlled entity. Moves based on keyboard input and checks
+     * collisions against the map. In a complete JRPG this class would
+     * manage stats, inventory and battle abilities.
+     */
+    class Player extends Entity {
+      constructor(x, y) {
+        super(x, y);
+        this.speed = 50; // pixels per second
+      }
+      update(dt, engine) {
+        const input = engine.input;
+        let dx = 0;
+        let dy = 0;
+        if (input.left) dx -= 1;
+        if (input.right) dx += 1;
+        if (input.up) dy -= 1;
+        if (input.down) dy += 1;
+        // Normalize diagonal movement
+        if (dx !== 0 && dy !== 0) {
+          const inv = 1 / Math.sqrt(2);
+          dx *= inv;
+          dy *= inv;
+        }
+        const newX = this.x + dx * this.speed * dt;
+        const newY = this.y + dy * this.speed * dt;
+        // Convert pixel coordinates to tile coordinates for collision
+        const tileX = Math.floor(newX / TILE);
+        const tileY = Math.floor(newY / TILE);
+        if (engine.map.isWalkable(tileX, tileY)) {
+          this.x = newX;
+          this.y = newY;
+        }
+      }
+      draw(ctx) {
+        ctx.fillStyle = '#69d38d';
+        ctx.fillRect(this.x, this.y, TILE, TILE);
+      }
+    }
+
+    /**
+     * Main game engine. Handles the update/render loop, keyboard input
+     * tracking and stores entities and the map. The engine expects the
+     * canvas passed to it to be scaled via CSS for crisp pixel art.
+     */
+    class GameEngine {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.entities = [];
+        this.map = null;
+        this.running = false;
+        this.lastTime = 0;
+        this.input = { left: false, right: false, up: false, down: false };
+        this.setupInput();
+      }
+      setupInput() {
+        // Arrow keys and WASD support
+        const keyMap = {
+          ArrowLeft: 'left', a: 'left', A: 'left',
+          ArrowRight: 'right', d: 'right', D: 'right',
+          ArrowUp: 'up', w: 'up', W: 'up',
+          ArrowDown: 'down', s: 'down', S: 'down',
+        };
+        window.addEventListener('keydown', e => {
+          const dir = keyMap[e.key];
+          if (dir) {
+            this.input[dir] = true;
+            // Prevent page scrolling
+            e.preventDefault();
+          }
+        });
+        window.addEventListener('keyup', e => {
+          const dir = keyMap[e.key];
+          if (dir) {
+            this.input[dir] = false;
+            e.preventDefault();
+          }
+        });
+      }
+      addEntity(ent) {
+        this.entities.push(ent);
+      }
+      loadMap(map) {
+        this.map = map;
+      }
+      start() {
+        this.running = true;
+        this.lastTime = performance.now();
+        requestAnimationFrame(this.loop.bind(this));
+      }
+      loop(now) {
+        if (!this.running) return;
+        const dt = (now - this.lastTime) / 1000;
+        this.lastTime = now;
+        this.update(dt);
+        this.render();
+        requestAnimationFrame(this.loop.bind(this));
+      }
+      update(dt) {
+        this.entities.forEach(ent => ent.update(dt, this));
+      }
+      render() {
+        if (!this.map) return;
+        // Clear canvas
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        // Draw map first
+        this.map.draw(this.ctx);
+        // Then entities
+        this.entities.forEach(ent => ent.draw(this.ctx));
+      }
+    }
+
+    // Store engine instance globally so it can be reset when starting a new game
+    let currentEngine = null;
+
+    /**
+     * Sets up and starts a new game instance. If an existing game is
+     * running, it will be stopped and replaced. For now the map is a
+     * hardcoded layout; later versions should generate maps based on
+     * uploaded study material or AI prompts.
+     */
+    function startGame() {
+      // Stop existing engine
+      if (currentEngine) {
+        currentEngine.running = false;
+      }
+      const canvas = document.getElementById('gameCanvas');
+      // Set logical canvas size to match tile grid (10x6 tiles for 320x192)
+      canvas.width = VIEW_W;
+      canvas.height = VIEW_H;
+      const engine = new GameEngine(canvas);
+      // Example map: 10x6 tiles (320/32 = 10, 192/32 = 6). 1 = wall, 0 = ground
+      const tiles = [
+        1,1,1,1,1,1,1,1,1,1,
+        1,0,0,0,0,0,0,0,0,1,
+        1,0,0,0,0,0,0,0,0,1,
+        1,0,0,0,0,0,0,0,0,1,
+        1,0,0,0,0,0,0,0,0,1,
+        1,1,1,1,1,1,1,1,1,1,
+      ];
+      const map = new GameMap(10, 6, tiles);
+      engine.loadMap(map);
+      // Add player at tile (1,1)
+      const player = new Player(1 * TILE, 1 * TILE);
+      engine.addEntity(player);
+      engine.start();
+      currentEngine = engine;
+    }
+
+    // Kick off the UI setup once the DOM is fully loaded
+    window.addEventListener('DOMContentLoaded', () => {
+      initUI();
+    });
+  </script>
+</body>
+</html>
