@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scholar Strike</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════
+     AUTH SCREEN (Login / Registo)
+══════════════════════════════════════════════ -->
+<div id="authScreen" class="screen">
+  <div class="auth-card panel">
+
+    <!-- Logo -->
+    <div class="auth-logo">
+      <div class="auth-logo-icon">✦</div>
+      <div class="auth-logo-title">SCHOLAR<br>STRIKE</div>
+      <div class="auth-logo-sub">A Arena do Conhecimento</div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="auth-tabs">
+      <button class="auth-tab auth-tab-active" id="authLoginTab">Entrar</button>
+      <button class="auth-tab" id="authRegisterTab">Criar Conta</button>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <div id="loginForm" class="auth-form">
+      <div class="auth-field">
+        <label class="auth-label" for="loginUsername">Nome de Utilizador</label>
+        <input id="loginUsername" class="input auth-input" type="text"
+          placeholder="o_teu_nome" autocomplete="username" maxlength="20">
+      </div>
+      <div class="auth-field">
+        <label class="auth-label" for="loginPassword">Palavra-passe</label>
+        <input id="loginPassword" class="input auth-input" type="password"
+          placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <div id="loginFormError" class="auth-error hidden"></div>
+      <button class="btn auth-submit-btn" id="loginSubmitBtn">⚔ Entrar</button>
+      <p class="auth-switch-hint">Ainda não tens conta?
+        <button class="auth-link" id="authGoRegister" onclick="document.getElementById('authRegisterTab').click()">Cria uma aqui</button>
+      </p>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div id="registerForm" class="auth-form hidden">
+      <div class="auth-field">
+        <label class="auth-label" for="regUsername">Nome de Utilizador</label>
+        <input id="regUsername" class="input auth-input" type="text"
+          placeholder="o_teu_nome" autocomplete="username" maxlength="20">
+      </div>
+      <div class="auth-field">
+        <label class="auth-label" for="regPassword">Palavra-passe</label>
+        <input id="regPassword" class="input auth-input" type="password"
+          placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+      </div>
+      <div class="auth-field">
+        <label class="auth-label" for="regConfirm">Confirmar Palavra-passe</label>
+        <input id="regConfirm" class="input auth-input" type="password"
+          placeholder="Repete a palavra-passe" autocomplete="new-password">
+      </div>
+      <div id="registerFormError" class="auth-error hidden"></div>
+      <button class="btn auth-submit-btn" id="registerSubmitBtn">✨ Criar Conta</button>
+      <p class="auth-switch-hint">Já tens conta?
+        <button class="auth-link" onclick="document.getElementById('authLoginTab').click()">Entra aqui</button>
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     HOME SCREEN
+══════════════════════════════════════════════ -->
+<div id="homeScreen" class="screen hidden">
+  <!-- User info bar (top right of home) -->
+  <div class="home-user-bar">
+    <span id="homeUserBadge">👤</span>
+    <button class="auth-link home-logout-btn" id="homeLogoutBtn">Sair</button>
+  </div>
+  <div class="panel home-wrap">
+    <div class="home-art"></div>
+    <div class="title">SCHOLAR<br>STRIKE</div>
+    <div class="subtitle">Escolhe um herói, carrega o teu material de estudo e entra num mundo dark fantasy onde o conhecimento é a tua arma.</div>
+    <button class="btn" id="startBtn">Começar Aventura</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     CHARACTER SCREEN
+══════════════════════════════════════════════ -->
+<div id="characterScreen" class="screen hidden">
+  <div class="character-wrap">
+
+    <!-- Hero grid (left) -->
+    <div class="char-left">
+      <div class="char-left-header">
+        <div class="char-screen-title">Scholar Strike</div>
+        <div class="char-screen-subtitle">Escolhe o teu Herói</div>
+      </div>
+      <div class="model-grid" id="modelGrid"></div>
+    </div>
+
+    <!-- Preview + config (right) -->
+    <div class="preview-pane">
+
+      <!-- Hero preview art -->
+      <div class="preview-stage" id="previewStage">
+        <div class="preview-empty">
+          <span>⚔</span>
+          <p>Seleciona um herói</p>
+        </div>
+      </div>
+
+      <div class="preview-config">
+
+        <div>
+          <div class="section-label">Nome do Herói</div>
+          <input id="nameInput" class="input" maxlength="18" value="Aveline" placeholder="Nome do teu herói...">
+        </div>
+
+        <div>
+          <div class="section-label">Disciplina</div>
+          <div class="discipline-grid" id="disciplineGrid"></div>
+        </div>
+
+        <!-- API Key -->
+        <div>
+          <div class="section-label">Chave API (Anthropic Claude)</div>
+          <div class="api-key-wrap">
+            <input id="apiKeyInput" class="input api-key-input" type="password"
+              placeholder="sk-ant-api03-..." autocomplete="off">
+            <button class="btn-icon" id="apiKeyToggle" title="Mostrar/ocultar chave" type="button">👁</button>
+          </div>
+          <div class="api-key-hint" id="apiKeyHint">
+            🔑 Necessária para gerar perguntas com IA. 
+            <a href="https://console.anthropic.com/keys" target="_blank" rel="noopener">Obter chave →</a>
+          </div>
+          <div class="api-key-status" id="apiKeyStatus"></div>
+        </div>
+
+        <!-- File upload -->
+        <div>
+          <div class="section-label">Material de Estudo</div>
+          <div class="file-zone" id="fileZone">
+            <div style="font-size:24px">📚</div>
+            <p>Clica ou arrasta o teu ficheiro .txt / .pdf aqui</p>
+            <p>A IA irá gerar perguntas a partir do teu conteúdo</p>
+            <div class="file-loaded" id="fileLoaded"></div>
+            <input type="file" id="fileInput" accept=".txt,.pdf" style="display:none">
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn secondary" id="backHomeBtn">← Voltar</button>
+          <button class="btn" id="enterWorldBtn">Entrar no Mundo ⚔</button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MINI MENU (game + battle)
+══════════════════════════════════════════════ -->
+<div class="game-menu hidden" id="gameMenu">
+  <button class="game-menu-toggle" id="gameMenuToggle" title="Menu">☰</button>
+  <div class="game-menu-dropdown hidden" id="gameMenuDropdown">
+    <div class="game-menu-user" id="loggedUserBadge">👤</div>
+    <button class="game-menu-item" id="menuHomeBtn">🏠 Início</button>
+    <button class="game-menu-item" id="logoutBtn">🚪 Terminar Sessão</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     GAME SCREEN  (world exploration)
+══════════════════════════════════════════════ -->
+<div id="gameScreen" class="screen hidden">
+  <canvas id="gameCanvas" width="320" height="180"></canvas>
+
+  <!-- HUD -->
+  <div class="hud">
+    <div class="hud-card">
+      <div class="hud-title">Scholar Registry</div>
+      <div id="hudName"  style="font-size:18px;color:#f4d98d">Aveline</div>
+      <div id="hudClass" style="font-size:14px;color:#bfb6a2">Wordweaver</div>
+      <div class="hud-row">
+        <span style="width:32px;font-size:12px;color:var(--muted)">HP</span>
+        <div class="bar"><div id="hpFill" class="fill hp" style="width:100%"></div></div>
+        <span id="hpText" style="font-size:12px;min-width:48px;text-align:right">40/40</span>
+      </div>
+      <div class="hud-row">
+        <span style="width:32px;font-size:12px;color:var(--muted)">MP</span>
+        <div class="bar"><div id="mpFill" class="fill mp" style="width:100%"></div></div>
+        <span id="mpText" style="font-size:12px;min-width:48px;text-align:right">20/20</span>
+      </div>
+      <div class="hud-row">
+        <span style="width:32px;font-size:12px;color:var(--muted)">XP</span>
+        <div class="bar"><div id="xpFill" class="fill xp" style="width:0%"></div></div>
+        <span id="xpText" style="font-size:12px;min-width:48px;text-align:right">0/100</span>
+      </div>
+      <div style="margin-top:6px;font-size:11px;color:var(--muted)">Nível <span id="levelText">1</span></div>
+    </div>
+
+    <div class="hud-card topright">
+      <div class="hud-title">Controlos</div>
+      <div class="controls">WASD / Setas — mover<br>E — falar / interagir<br>Shift — correr</div>
+      <div id="regionText" style="margin-top:8px;font-size:15px;color:#d9d1bc">Oakvale Hollow</div>
+    </div>
+  </div>
+
+  <div id="prompt" class="prompt hidden">Pressiona E</div>
+
+  <!-- NPC Dialogue -->
+  <div id="dialogue" class="dialogue hidden">
+    <div class="dialogue-portrait">
+      <canvas id="portraitCanvas" width="150" height="170"></canvas>
+    </div>
+    <div>
+      <div class="dialogue-name" id="dialogueName"></div>
+      <div class="dialogue-text" id="dialogueText"></div>
+      <div class="dialogue-continue">Pressiona E para continuar</div>
+    </div>
+  </div>
+
+  <div id="location" class="location">Oakvale Hollow</div>
+  <div id="fade" class="fade"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     BATTLE SCREEN
+══════════════════════════════════════════════ -->
+<div id="battleScreen" class="screen hidden">
+  <div class="battle-arena">
+    <!-- Enemy Info Box (Top Left) -->
+    <div class="poke-box info-box enemy-info">
+      <div class="poke-name-row">
+        <span id="battleEnemyName">Golem do Esquecimento</span>
+        <span class="poke-level">Lv 25</span>
+      </div>
+      <div class="hp-bar-container">
+        <span class="hp-label">HP:</span>
+        <div class="hp-bar-bg">
+          <div id="enemyHpBar" class="hp-bar-fill" style="width:100%"></div>
+        </div>
+      </div>
+      <span id="enemyHpVal" class="hp-val-text hidden">30/30</span>
+    </div>
+
+    <!-- Player Info Box (Mid Right) -->
+    <div class="poke-box info-box player-info">
+      <div class="poke-name-row">
+        <span id="battlePlayerName">Aveline</span>
+        <span class="poke-level">Lv <span id="battleLevelText">1</span></span>
+      </div>
+      <div class="hp-bar-container">
+        <span class="hp-label">HP:</span>
+        <div class="hp-bar-bg">
+          <div id="playerHpBar" class="hp-bar-fill" style="width:100%"></div>
+        </div>
+      </div>
+      <div class="hp-val-row">
+        <span id="playerHpVal" class="hp-val-text">40/ 40</span>
+      </div>
+    </div>
+
+    <!-- Battle Scene (Sprites on Platforms) -->
+    <div class="battle-scene">
+      <div class="platform-wrap enemy-platform">
+        <img src="battle_assets/grass_platform.png" class="platform-bg">
+        <div id="enemySprite" class="battle-sprite">🪨</div>
+      </div>
+      
+      <div class="platform-wrap player-platform">
+        <img src="battle_assets/grass_platform.png" class="platform-bg">
+        <div id="playerSprite" class="battle-sprite back-view">🧙</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Part -->
+  <div class="battle-footer">
+    <div class="poke-box dialog-box">
+      <div id="questionSubject" class="dialog-sub">A preparar pergunta...</div>
+      <div id="questionText" class="dialog-text"></div>
+      <div id="aiLoading" class="dialog-text">A Inteligência Artificial está a gerar a tua pergunta...</div>
+      <div id="battleLog" class="dialog-text hidden"></div>
+    </div>
+    
+    <div class="poke-box actions-box">
+      <div id="optionsGrid" class="options-2x2">
+        <!-- Buttons injected here -->
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════
+     LEVEL UP SCREEN
+══════════════════════════════════════════════ -->
+<div id="levelUpScreen" class="hidden">
+  <div class="levelup-card">
+    <div class="levelup-title">NÍVEL ACIMA!</div>
+    <div class="levelup-sub" id="levelUpMsg">Alcançaste o Nível 2!</div>
+    <div class="levelup-stats" id="levelUpStats"></div>
+    <button class="btn" id="levelUpOkBtn">Continuar</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     GAME COMPLETE SCREEN
+══════════════════════════════════════════════ -->
+<div id="gameCompleteScreen" class="hidden">
+  <div class="levelup-card" style="text-align:center">
+    <div class="levelup-title">🏆 JORNADA COMPLETA!</div>
+    <div class="levelup-sub">Derrotaste os guardiões do Véu Rasgado e restauraste o equilíbrio do conhecimento em Eidolon!</div>
+    <div style="font-size:52px;margin:20px 0">✨🌟✨</div>
+    <div class="levelup-stats" id="completeStats"></div>
+    <button class="btn" id="completeOkBtn" style="margin-top:16px">Jogar Novamente</button>
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script src="assets.js"></script>
+<script src="grass.js"></script>
+<script src="water.js"></script>
+<script src="path.js"></script>
+<script src="trees.js"></script>
+<script src="houses.js"></script>
+<script src="world.js"></script>
+<script src="game.js"></script>
+<script src="battle.js"></script>
+</body>
+</html>
